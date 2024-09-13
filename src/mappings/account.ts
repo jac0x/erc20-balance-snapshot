@@ -48,7 +48,7 @@ export function decreaseAccountBalance(account: Account, token: Token, amount: B
   return balance
 }
 
-export function saveAccountBalanceSnapshot(balance: AccountBalance, eventId: string, event: ethereum.Event): void {
+export function saveAccountBalanceSnapshot(balance: AccountBalance, event: ethereum.Event): void {
   let snapshot = new AccountBalanceSnapshot(balance.id + '-' + event.block.timestamp.toString())
   snapshot.account = balance.account
   snapshot.token = balance.token
@@ -57,8 +57,6 @@ export function saveAccountBalanceSnapshot(balance: AccountBalance, eventId: str
   snapshot.block = event.block.number
   snapshot.transaction = event.transaction.hash
   snapshot.timestamp = event.block.timestamp
-
-  snapshot.event = eventId
 
   snapshot.save()
 }

@@ -1,10 +1,10 @@
 import { BigDecimal, Bytes, ethereum } from '@graphprotocol/graph-ts'
 
-import { Transfer } from '../../generated/templates/StandardToken/ERC20'
+import { ERC20, Transfer } from '../../generated/templates/StandardToken/ERC20'
 import { Burn } from '../../generated/templates/BurnableToken/Burnable'
 import { Mint } from '../../generated/templates/MintableToken/Mintable'
 
-import { Token, BurnEvent, MintEvent, TransferEvent } from '../../generated/schema'
+import { Token } from '../../generated/schema'
 
 import { toDecimal, ONE, ZERO } from '../helpers/number'
 
@@ -17,31 +17,63 @@ import {
 
 const GENESIS_ADDRESS = '0x0000000000000000000000000000000000000000'
 
+export function fetchTokenDetails(event: ethereum.Event): Token | null {
+  //check if token details are already saved
+  let token = Token.load(event.address.toHex());
+  if (!token) {
+    //if token details are not available
+    //create a new token
+    token = new Token(event.address.toHex());
+
+    //set some default values
+    token.name = "N/A";
+    token.symbol = "N/A";
+    token.decimals = 0;
+
+    //bind the contract
+    let erc20 = ERC20.bind(event.address);
+
+    //fetch name
+    let tokenName = erc20.try_name();
+    if (!tokenName.reverted) {
+      token.name = tokenName.value;
+    }
+
+    //fetch symbol
+    let tokenSymbol = erc20.try_symbol();
+    if (!tokenSymbol.reverted) {
+      token.symbol = tokenSymbol.value;
+    }
+
+    //fetch decimals
+    let tokenDecimal = erc20.try_decimals();
+    if (!tokenDecimal.reverted) {
+      token.decimals = tokenDecimal.value;
+    }
+
+    //save the details
+    token.save();
+  }
+  return token;
+}
+
 export function handleTransfer(event: Transfer): void {
-  let token = Token.load(event.address.toHex())
+  let token = fetchTokenDetails(event)
 
   if (token != null) {
     let amount = toDecimal(event.params.value, token.decimals)
 
-    let isBurn = token.flags.includes('burnable-transfer') && event.params.to.toHex() == GENESIS_ADDRESS
-    let isMint = token.flags.includes('mintable-transfer') && event.params.from.toHex() == GENESIS_ADDRESS
+    let isBurn = /*token.flags.includes('burnable-transfer') &&*/ event.params.to.toHex() == GENESIS_ADDRESS
+    let isMint = /*token.flags.includes('mintable-transfer') &&*/ event.params.from.toHex() == GENESIS_ADDRESS
     let isTransfer = !isBurn && !isMint
 
-    // Update token event logs
-    let eventEntityId: string = ''
 
     if (isBurn) {
-      let eventEntity = handleBurnEvent(token, amount, event.params.from, event)
-
-      eventEntityId = eventEntity.id
+      handleBurnEvent(token, amount, event.params.from, event)
     } else if (isMint) {
-      let eventEntity = handleMintEvent(token, amount, event.params.to, event)
-
-      eventEntityId = eventEntity.id
+      handleMintEvent(token, amount, event.params.to, event)
     } else if (isTransfer) {
-      let eventEntity = handleTransferEvent(token, amount, event.params.from, event.params.to, event)
-
-      eventEntityId = eventEntity.id
+      handleTransferEvent(token, amount, event.params.from, event.params.to, event)
     }
 
     // Updates balances of accounts
@@ -57,7 +89,7 @@ export function handleTransfer(event: Transfer): void {
       accountBalance.save()
 
       // To provide information about evolution of account balances
-      saveAccountBalanceSnapshot(accountBalance, eventEntityId, event)
+      saveAccountBalanceSnapshot(accountBalance, event)
     }
 
     if (isTransfer || isMint) {
@@ -72,19 +104,19 @@ export function handleTransfer(event: Transfer): void {
       accountBalance.save()
 
       // To provide information about evolution of account balances
-      saveAccountBalanceSnapshot(accountBalance, eventEntityId, event)
+      saveAccountBalanceSnapshot(accountBalance, event)
     }
   }
 }
 
 export function handleBurn(event: Burn): void {
-  let token = Token.load(event.address.toHex())
+  let token = fetchTokenDetails(event)
 
   if (token != null) {
     let amount = toDecimal(event.params.value, token.decimals)
 
     // Persist burn event log
-    let eventEntity = handleBurnEvent(token, amount, event.params.burner, event)
+    handleBurnEvent(token, amount, event.params.burner, event)
 
     // Update source account balance
     let account = getOrCreateAccount(event.params.burner)
@@ -98,18 +130,18 @@ export function handleBurn(event: Burn): void {
     accountBalance.save()
 
     // To provide information about evolution of account balances
-    saveAccountBalanceSnapshot(accountBalance, eventEntity.id, event)
+    saveAccountBalanceSnapshot(accountBalance, event)
   }
 }
 
 export function handleMint(event: Mint): void {
-  let token = Token.load(event.address.toHex())
+  let token = fetchTokenDetails(event)
 
   if (token != null) {
     let amount = toDecimal(event.params.amount, token.decimals)
 
     // Persist mint event log
-    let eventEntity = handleMintEvent(token, amount, event.params.to, event)
+    handleMintEvent(token, amount, event.params.to, event)
 
     // Update destination account balance
     let account = getOrCreateAccount(event.params.to)
@@ -123,22 +155,12 @@ export function handleMint(event: Mint): void {
     accountBalance.save()
 
     // To provide information about evolution of account balances
-    saveAccountBalanceSnapshot(accountBalance, eventEntity.id, event)
+    saveAccountBalanceSnapshot(accountBalance, event)
   }
 }
 
-function handleBurnEvent(token: Token | null, amount: BigDecimal, burner: Bytes, event: ethereum.Event): BurnEvent {
-  let burnEvent = new BurnEvent(event.transaction.hash.toHex() + '-' + event.logIndex.toString())
-  burnEvent.token = event.address.toHex()
-  burnEvent.amount = amount
-  burnEvent.sender = event.transaction.from
-  burnEvent.burner = burner
-
-  burnEvent.block = event.block.number
-  burnEvent.timestamp = event.block.timestamp
-  burnEvent.transaction = event.transaction.hash
-
-  burnEvent.save()
+function handleBurnEvent(token: Token | null, amount: BigDecimal, burner: Bytes, event: ethereum.Event): void {
+  
 
   // Track total supply/burned
   if (token != null) {
@@ -149,22 +171,10 @@ function handleBurnEvent(token: Token | null, amount: BigDecimal, burner: Bytes,
     token.save()
   }
 
-  return burnEvent
 }
 
-function handleMintEvent(token: Token | null, amount: BigDecimal, destination: Bytes, event: ethereum.Event): MintEvent {
-  let mintEvent = new MintEvent(event.transaction.hash.toHex() + '-' + event.logIndex.toString())
-  mintEvent.token = event.address.toHex()
-  mintEvent.amount = amount
-  mintEvent.sender = event.transaction.from
-  mintEvent.destination = destination
-  mintEvent.minter = event.transaction.from
+function handleMintEvent(token: Token | null, amount: BigDecimal, destination: Bytes, event: ethereum.Event): void {
 
-  mintEvent.block = event.block.number
-  mintEvent.timestamp = event.block.timestamp
-  mintEvent.transaction = event.transaction.hash
-
-  mintEvent.save()
 
   // Track total token supply/minted
   if (token != null) {
@@ -176,7 +186,6 @@ function handleMintEvent(token: Token | null, amount: BigDecimal, destination: B
     token.save()
   }
 
-  return mintEvent
 }
 
 function handleTransferEvent(
@@ -185,19 +194,8 @@ function handleTransferEvent(
   source: Bytes,
   destination: Bytes,
   event: ethereum.Event,
-): TransferEvent {
-  let transferEvent = new TransferEvent(event.transaction.hash.toHex() + '-' + event.logIndex.toString())
-  transferEvent.token = event.address.toHex()
-  transferEvent.amount = amount
-  transferEvent.sender = source
-  transferEvent.source = source
-  transferEvent.destination = destination
+): void {
 
-  transferEvent.block = event.block.number
-  transferEvent.timestamp = event.block.timestamp
-  transferEvent.transaction = event.transaction.hash
-
-  transferEvent.save()
 
   // Track total token transferred
   if (token != null) {
@@ -208,5 +206,4 @@ function handleTransferEvent(
     token.save()
   }
 
-  return transferEvent
 }
