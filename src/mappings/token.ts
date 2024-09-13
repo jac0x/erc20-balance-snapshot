@@ -3,9 +3,8 @@ import { BigDecimal, Bytes, ethereum } from '@graphprotocol/graph-ts'
 import { Transfer } from '../../generated/templates/StandardToken/ERC20'
 import { Burn } from '../../generated/templates/BurnableToken/Burnable'
 import { Mint } from '../../generated/templates/MintableToken/Mintable'
-import { Pause, Unpause, Paused, Unpaused } from '../../generated/templates/PausableToken/Pausable'
 
-import { Token, BurnEvent, MintEvent, TransferEvent, PauseEvent } from '../../generated/schema'
+import { Token, BurnEvent, MintEvent, TransferEvent } from '../../generated/schema'
 
 import { toDecimal, ONE, ZERO } from '../helpers/number'
 
@@ -29,7 +28,7 @@ export function handleTransfer(event: Transfer): void {
     let isTransfer = !isBurn && !isMint
 
     // Update token event logs
-    let eventEntityId: string
+    let eventEntityId: string = ''
 
     if (isBurn) {
       let eventEntity = handleBurnEvent(token, amount, event.params.from, event)
@@ -128,30 +127,6 @@ export function handleMint(event: Mint): void {
   }
 }
 
-export function handlePause(event: Pause): void {
-  let token = Token.load(event.address.toHex())
-
-  handlePauseEvent(token, true, event)
-}
-
-export function handlePaused(event: Paused): void {
-  let token = Token.load(event.address.toHex())
-
-  handlePauseEvent(token, true, event)
-}
-
-export function handleUnpause(event: Unpause): void {
-  let token = Token.load(event.address.toHex())
-
-  handlePauseEvent(token, false, event)
-}
-
-export function handleUnpaused(event: Unpaused): void {
-  let token = Token.load(event.address.toHex())
-
-  handlePauseEvent(token, false, event)
-}
-
 function handleBurnEvent(token: Token | null, amount: BigDecimal, burner: Bytes, event: ethereum.Event): BurnEvent {
   let burnEvent = new BurnEvent(event.transaction.hash.toHex() + '-' + event.logIndex.toString())
   burnEvent.token = event.address.toHex()
@@ -234,26 +209,4 @@ function handleTransferEvent(
   }
 
   return transferEvent
-}
-
-function handlePauseEvent(token: Token | null, paused: boolean, event: ethereum.Event): PauseEvent {
-  let pauseEvent = new PauseEvent(event.transaction.hash.toHex() + '-' + event.logIndex.toString())
-  pauseEvent.token = event.address.toHex()
-  pauseEvent.amount = paused ? ONE.toBigDecimal() : ZERO.toBigDecimal()
-  pauseEvent.sender = event.transaction.from
-  pauseEvent.pauser = event.transaction.from
-
-  pauseEvent.block = event.block.number
-  pauseEvent.timestamp = event.block.timestamp
-  pauseEvent.transaction = event.transaction.hash
-
-  pauseEvent.save()
-
-  if (token != null) {
-    token.paused = paused
-
-    token.save()
-  }
-
-  return pauseEvent
 }

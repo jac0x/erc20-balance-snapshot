@@ -1,4 +1,6 @@
-specVersion: 0.0.2
+specVersion: 1.0.0
+indexerHints:
+  prune: auto
 schema:
   file: ./schema.graphql
 dataSources:
@@ -16,7 +18,7 @@ dataSources:
       startBlock: 75563
     mapping:
       kind: ethereum/events
-      apiVersion: 0.0.4
+      apiVersion: 0.0.7
       language: wasm/assemblyscript
       file: ./src/mappings/registry.ts
       entities:
@@ -39,7 +41,7 @@ templates:
       abi: ERC20
     mapping:
       kind: ethereum/events
-      apiVersion: 0.0.4
+      apiVersion: 0.0.7
       language: wasm/assemblyscript
       file: ./src/mappings/token.ts
       entities:
@@ -57,7 +59,7 @@ templates:
       abi: Burnable
     mapping:
       kind: ethereum/events
-      apiVersion: 0.0.4
+      apiVersion: 0.0.7
       language: wasm/assemblyscript
       file: ./src/mappings/token.ts
       entities:
@@ -75,7 +77,7 @@ templates:
       abi: Mintable
     mapping:
       kind: ethereum/events
-      apiVersion: 0.0.4
+      apiVersion: 0.0.7
       language: wasm/assemblyscript
       file: ./src/mappings/token.ts
       entities:
@@ -86,27 +88,3 @@ templates:
       eventHandlers:
         - event: Mint(indexed address,uint256)
           handler: handleMint
-  - name: PausableToken
-    kind: ethereum/contract
-    network: mainnet
-    source:
-      abi: Pausable
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.4
-      language: wasm/assemblyscript
-      file: ./src/mappings/token.ts
-      entities:
-        - Token
-      abis:
-        - name: Pausable
-          file: ./abis/Pausable.json
-      eventHandlers:
-        - event: Pause()
-          handler: handlePause
-        - event: Unpause()
-          handler: handleUnpause
-        - event: Paused(address)
-          handler: handlePaused
-        - event: Unpaused(address)
-          handler: handleUnpaused
