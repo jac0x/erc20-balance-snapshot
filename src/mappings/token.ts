@@ -7,6 +7,7 @@ import { Mint } from '../../generated/templates/MintableToken/Mintable'
 import { Token } from '../../generated/schema'
 
 import { toDecimal, ONE, ZERO } from '../helpers/number'
+import { decodeFlags, DEFAULT_DECIMALS } from '../helpers/token'
 
 import {
   decreaseAccountBalance,
@@ -28,7 +29,7 @@ export function fetchTokenDetails(event: ethereum.Event): Token | null {
     //set some default values
     token.name = "N/A";
     token.symbol = "N/A";
-    token.decimals = 0;
+    token.decimals = DEFAULT_DECIMALS;
 
     //bind the contract
     let erc20 = ERC20.bind(event.address);
@@ -50,6 +51,20 @@ export function fetchTokenDetails(event: ethereum.Event): Token | null {
     if (!tokenDecimal.reverted) {
       token.decimals = tokenDecimal.value;
     }
+
+    token.address = event.address;
+    token.flags = decodeFlags(0);
+    
+    token.eventCount = ZERO;
+    token.burnEventCount = ZERO;
+    token.mintEventCount = ZERO;
+    token.transferEventCount = ZERO;
+
+    let initialSupply = erc20.try_totalSupply();
+    token.totalSupply = initialSupply.reverted ? ZERO.toBigDecimal() : toDecimal(initialSupply.value, token.decimals);
+    token.totalBurned = ZERO.toBigDecimal();
+    token.totalMinted = ZERO.toBigDecimal();
+    token.totalTransferred = ZERO.toBigDecimal();
 
     //save the details
     token.save();
@@ -162,29 +177,29 @@ export function handleMint(event: Mint): void {
 function handleBurnEvent(token: Token | null, amount: BigDecimal, burner: Bytes, event: ethereum.Event): void {
   
 
-  // Track total supply/burned
-  if (token != null) {
-    token.eventCount = token.eventCount.plus(ONE)
-    token.burnEventCount = token.burnEventCount.plus(ONE)
-    token.totalSupply = token.totalSupply.minus(amount)
-    token.totalBurned = token.totalBurned.plus(amount)
-    token.save()
-  }
+  // // Track total supply/burned
+  // if (token != null) {
+  //   token.eventCount = token.eventCount.plus(ONE)
+  //   token.burnEventCount = token.burnEventCount.plus(ONE)
+  //   token.totalSupply = token.totalSupply.minus(amount)
+  //   token.totalBurned = token.totalBurned.plus(amount)
+  //   token.save()
+  // }
 
 }
 
 function handleMintEvent(token: Token | null, amount: BigDecimal, destination: Bytes, event: ethereum.Event): void {
 
 
-  // Track total token supply/minted
-  if (token != null) {
-    token.eventCount = token.eventCount.plus(ONE)
-    token.mintEventCount = token.mintEventCount.plus(ONE)
-    token.totalSupply = token.totalSupply.plus(amount)
-    token.totalMinted = token.totalMinted.plus(amount)
+  // // Track total token supply/minted
+  // if (token != null) {
+  //   token.eventCount = token.eventCount.plus(ONE)
+  //   token.mintEventCount = token.mintEventCount.plus(ONE)
+  //   token.totalSupply = token.totalSupply.plus(amount)
+  //   token.totalMinted = token.totalMinted.plus(amount)
 
-    token.save()
-  }
+  //   token.save()
+  // }
 
 }
 
@@ -197,13 +212,13 @@ function handleTransferEvent(
 ): void {
 
 
-  // Track total token transferred
-  if (token != null) {
-    token.eventCount = token.eventCount.plus(ONE)
-    token.transferEventCount = token.transferEventCount.plus(ONE)
-    token.totalTransferred = token.totalTransferred.plus(amount)
+  // // Track total token transferred
+  // if (token != null) {
+  //   token.eventCount = token.eventCount.plus(ONE)
+  //   token.transferEventCount = token.transferEventCount.plus(ONE)
+  //   token.totalTransferred = token.totalTransferred.plus(amount)
 
-    token.save()
-  }
+  //   token.save()
+  // }
 
 }
